@@ -141,8 +141,15 @@ bool create_directories(const std::filesystem::path& path) noexcept {
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
   try {
 #endif
-    const auto pathString = fs_path_to_string(path);
-    return SDL_CreateDirectory(pathString.c_str());
+    // Not SDL_CreateDirectory: when the directory is missing, it creates every ancestor starting from the root, and
+    // sandboxes like UWP on Xbox deny creating (rather than report as existing) ancestors such as Q:\Users.
+    // std::filesystem starts from the deepest existing ancestor instead.
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    if (ec) {
+      return SDL_SetError("Couldn't create directory '%s': %s", fs_path_to_string(path).c_str(), ec.message().c_str());
+    }
+    return true;
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
   } catch (const std::exception& error) { return SDL_SetError("Failed to encode directory path: %s", error.what()); }
 #endif
