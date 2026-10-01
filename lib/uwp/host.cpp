@@ -379,6 +379,9 @@ Sint16 to_axis(double value) {
                                         long{SDL_JOYSTICK_AXIS_MAX}));
 }
 
+// Virtual joystick triggers span the full axis range, resting at SDL_JOYSTICK_AXIS_MIN; SDL rescales them to 0..max.
+Sint16 to_trigger_axis(double value) { return to_axis(value * 2.0 - 1.0); }
+
 void SDLCALL update_gamepad(void* userdata) {
   auto* pad = static_cast<VirtualGamepad*>(userdata);
   if (pad->joystick == nullptr) {
@@ -394,8 +397,8 @@ void SDLCALL update_gamepad(void* userdata) {
   SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_LEFTY, to_axis(-reading.LeftThumbstickY));
   SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_RIGHTX, to_axis(reading.RightThumbstickX));
   SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_RIGHTY, to_axis(-reading.RightThumbstickY));
-  SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, to_axis(reading.LeftTrigger));
-  SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, to_axis(reading.RightTrigger));
+  SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_LEFT_TRIGGER, to_trigger_axis(reading.LeftTrigger));
+  SDL_SetJoystickVirtualAxis(pad->joystick, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER, to_trigger_axis(reading.RightTrigger));
   int index = 0;
   for (const auto& mapping : ButtonMappings) {
     SDL_SetJoystickVirtualButton(pad->joystick, index++, (reading.Buttons & mapping.wgi) == mapping.wgi);
