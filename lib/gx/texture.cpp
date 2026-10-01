@@ -465,10 +465,47 @@ void touch_bound_texture(const GXTexObj_& obj) {
   }
 }
 
+void sweep_superseded_copy_textures() {
+  // Each size and format copied to a destination gets its own texture, but only the latest copy is the destination's
+  // contents. Effects that vary the copy size every frame would otherwise accumulate a texture per size (each the size
+  // of the scaled framebuffer) until the game frees the destination.
+  absl::flat_hash_set<const void*> sourceIdentities;
+  auto& cache = g_gxState.copyTextureCache;
+  for (auto it = cache.begin(); it != cache.end();) {
+    const auto& ref = it->second;
+    const bool idle = s_frameCount > ref.lastCopyFrame &&
+                      s_frameCount - ref.lastCopyFrame > texture::SupersededCopyIdleFrames;
+    const auto current = g_gxState.copyTextures.find(it->first.dest);
+    const bool superseded = current == g_gxState.copyTextures.end() || current->second.handle != ref.handle;
+    if (idle && superseded) {
+      if (ref.handle) {
+        sourceIdentities.insert(ref.handle.get());
+      }
+      cache.erase(it++);
+    } else {
+      ++it;
+    }
+  }
+  if (sourceIdentities.empty()) {
+    return;
+  }
+  for (auto& [_, tlutCache] : s_tlutObjectCaches) {
+    for (auto it = tlutCache.dynamicPaletteTextures.begin(); it != tlutCache.dynamicPaletteTextures.end();) {
+      if (sourceIdentities.contains(it->first.sourceIdentity)) {
+        tlutCache.dynamicPaletteTextures.erase(it++);
+      } else {
+        ++it;
+      }
+    }
+  }
+}
+
 void sweep_object_caches() {
   const auto expired = [](uint64_t lastUsedFrame) {
     return s_frameCount > lastUsedFrame && s_frameCount - lastUsedFrame > texture::ObjectCacheIdleFrames;
   };
+
+  sweep_superseded_copy_textures();
 
   for (auto it = s_textureObjectCaches.begin(); it != s_textureObjectCaches.end();) {
     if (expired(it->second.lastUsedFrame)) {
@@ -567,6 +604,8 @@ size_t texture_source_size(u32 format, u32 width, u32 height, u32 mipCount) noex
 size_t tlut_source_size(u16 numEntries) noexcept { return static_cast<size_t>(numEntries) * sizeof(u16); }
 
 void invalidate_bindings() noexcept { s_pendingInvalidations.fetch_add(1, std::memory_order_release); }
+
+uint64_t current_frame() noexcept { return s_frameCount; }
 
 uint64_t current_bind_generation() noexcept {
   apply_pending_invalidations();

@@ -310,6 +310,7 @@ struct GXState {
   struct CopyTextureRef {
     gfx::TextureHandle handle;
     u32 revision = 0;
+    uint64_t lastCopyFrame = 0;
 
     operator bool() const noexcept { return handle.operator bool(); }
   };

@@ -290,6 +290,29 @@ TEST_F(GxTextureCacheTest, CopyRecreationAtSameDestinationRebindsHandle) {
   EXPECT_EQ(g_gxState.textures[0].ref, second);
 }
 
+TEST_F(GxTextureCacheTest, SupersededCopyTexturesAgeOut) {
+  std::array<uint8_t, 16> destination{};
+  const auto keyFor = [&](u32 size) {
+    return GXState::CopyTextureKey{.dest = destination.data(), .width = size, .height = size, .format = GX_TF_RGBA8};
+  };
+  const auto stale = testing::make_texture_handle(2, 2);
+  const auto reused = testing::make_texture_handle(4, 4);
+  const auto current = testing::make_texture_handle(8, 8);
+  g_gxState.copyTextureCache[keyFor(2)] = {.handle = stale, .revision = 1, .lastCopyFrame = texture::current_frame()};
+  g_gxState.copyTextureCache[keyFor(4)] = {.handle = reused, .revision = 1, .lastCopyFrame = texture::current_frame()};
+  g_gxState.copyTextureCache[keyFor(8)] = {.handle = current, .revision = 1, .lastCopyFrame = texture::current_frame()};
+  g_gxState.copyTextures[destination.data()] = g_gxState.copyTextureCache[keyFor(8)];
+
+  for (uint64_t i = 0; i <= texture::SupersededCopyIdleFrames; ++i) {
+    g_gxState.copyTextureCache[keyFor(4)].lastCopyFrame = texture::current_frame();
+    texture::end_frame();
+  }
+
+  EXPECT_FALSE(g_gxState.copyTextureCache.contains(keyFor(2)));
+  EXPECT_TRUE(g_gxState.copyTextureCache.contains(keyFor(4)));
+  EXPECT_TRUE(g_gxState.copyTextureCache.contains(keyFor(8)));
+}
+
 TEST_F(GxTextureCacheTest, ObjectAgingKeepsContentEntry) {
   std::array<uint8_t, 16> pixels{};
   const auto obj = make_texture(pixels.data(), 1);

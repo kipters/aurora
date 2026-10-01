@@ -55,6 +55,7 @@ void copy_tex(const void* dest, GXBool clear) noexcept {
     it = g_gxState.copyTextureCache.emplace(key, GXState::CopyTextureRef{.handle = handle, .revision = 0}).first;
   }
   auto& handle = it->second;
+  handle.lastCopyFrame = texture::current_frame();
 
   const auto clearColor = clear && g_gxState.colorUpdate;
   const auto clearAlpha = clear && g_gxState.alphaUpdate && efb_has_alpha(g_gxState.pixelFmt);

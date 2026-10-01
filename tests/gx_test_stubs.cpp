@@ -71,6 +71,7 @@ const gfx::TextureBind& get_texture(GXTexMapID id) noexcept { return g_gxState.t
 namespace texture {
 void invalidate_bindings() noexcept {}
 uint64_t current_bind_generation() noexcept { return 1; }
+uint64_t current_frame() noexcept { return 0; }
 } // namespace texture
 void evict_texture_object(u32 texObjId) noexcept {
   for (auto& obj : g_gxState.loadedTextures) {

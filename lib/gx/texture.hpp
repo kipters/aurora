@@ -26,6 +26,9 @@ const TextureStats& texture_stats() noexcept;
 namespace texture {
 constexpr uint64_t ContentCacheBudgetBytes = 128ull * 1024ull * 1024ull;
 constexpr uint64_t ObjectCacheIdleFrames = 600;
+// Copy textures superseded by a copy of another size or format to the same destination are dropped once they
+// haven't been copied to for this many frames.
+constexpr uint64_t SupersededCopyIdleFrames = 8;
 constexpr bool AsyncTextureReplacements = true;
 constexpr uint32_t ReplacementThumbnailDim = 64;
 constexpr uint64_t ReplacementPublishBudgetBytes = 12ull * 1024ull * 1024ull;
@@ -35,6 +38,7 @@ size_t tlut_source_size(u16 numEntries) noexcept;
 
 void invalidate_bindings() noexcept;
 uint64_t current_bind_generation() noexcept;
+uint64_t current_frame() noexcept;
 void invalidate_replacement(uint64_t replacementId) noexcept;
 void end_frame() noexcept;
 void shutdown() noexcept;
