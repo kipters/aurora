@@ -24,6 +24,10 @@
 #include "../internal.hpp"
 #include "../window.hpp"
 #include "gpu_prof.hpp"
+#ifdef AURORA_UWP
+#include "../uwp/host.hpp"
+#include "../uwp/xbox_d3d12.hpp"
+#endif
 
 #ifdef WEBGPU_DAWN
 #include "../dawn/TracyPlatform.hpp"
@@ -91,6 +95,12 @@ AuroraLogLevel wgpu_log_level(wgpu::LoggingType type) {
 }
 
 void wgpu_log(wgpu::LoggingType type, wgpu::StringView message) {
+#ifdef AURORA_UWP
+  // Expected for every new pipeline with the Xbox D3D12 workaround (see xbox_d3d12.hpp)
+  if (std::string_view{message}.find("get cached blob failed with E_NOTIMPL") != std::string_view::npos) {
+    return;
+  }
+#endif
   Log.report(wgpu_log_level(type), "WebGPU message: {}", message);
 }
 
@@ -772,6 +782,12 @@ static bool create_surface() {
 }
 
 bool initialize(AuroraBackend auroraBackend, bool allowCpu) {
+#ifdef AURORA_UWP
+  if (auroraBackend == BACKEND_D3D12 && uwp::is_xbox() && !uwp::install_xbox_d3d12_workarounds()) {
+    Log.warn("D3D12 can't be used on Xbox without its workarounds");
+    return false;
+  }
+#endif
   if (!g_instance) {
     Log.info("Creating WebGPU instance");
     const std::array requiredInstanceFeatures{

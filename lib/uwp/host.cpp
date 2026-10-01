@@ -14,6 +14,7 @@
 #include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Gaming.Input.h>
 #include <winrt/Windows.Graphics.Display.h>
+#include <winrt/Windows.Graphics.Display.Core.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.System.Profile.h>
@@ -49,6 +50,7 @@ using namespace winrt::Windows::ApplicationModel::Core;
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Gaming::Input;
 using namespace winrt::Windows::Graphics::Display;
+using namespace winrt::Windows::Graphics::Display::Core;
 using namespace winrt::Windows::System;
 using namespace winrt::Windows::UI::Core;
 
@@ -66,7 +68,10 @@ CoreWindow g_coreWindow{nullptr};
 SDL_Window* g_proxyWindow = nullptr;
 int g_pixelWidth = 0;
 int g_pixelHeight = 0;
+float g_contentScale = 1.f;
 bool g_visible = true;
+// Set when the TV's display mode changes; handled on the next event pump.
+std::atomic_bool g_displayModeChanged = false;
 
 // Text input events point at strings that must outlive the event; keep the latest few alive.
 std::deque<std::string> g_textStorage;
@@ -108,20 +113,46 @@ std::vector<std::string> launch_arguments(const std::string& installedLocation, 
   return args;
 }
 
+HdmiDisplayMode xbox_display_mode() {
+  if (!is_xbox()) {
+    return nullptr;
+  }
+  try {
+    if (const auto hdmi = HdmiDisplayInformation::GetForCurrentView()) {
+      return hdmi.GetCurrentDisplayMode();
+    }
+  } catch (const winrt::hresult_error& e) {
+    Log.warn("Failed to get the HDMI display mode: {}", to_utf8(e.message()));
+  }
+  return nullptr;
+}
+
 void update_window_size() {
   if (!g_coreWindow) {
     return;
   }
   const auto bounds = g_coreWindow.Bounds();
-  const double scale = DisplayInformation::GetForCurrentView().RawPixelsPerViewPixel();
-  const int width = std::max(1, static_cast<int>(std::lround(bounds.Width * scale)));
-  const int height = std::max(1, static_cast<int>(std::lround(bounds.Height * scale)));
+  int width = 0;
+  int height = 0;
+  // On Xbox the CoreWindow is 1920x1080 whatever the TV is set to, but a swapchain at the TV's resolution is
+  // presented natively, so render at that resolution (e.g. 3840x2160).
+  if (const auto mode = xbox_display_mode()) {
+    width = static_cast<int>(mode.ResolutionWidthInRawPixels());
+    height = static_cast<int>(mode.ResolutionHeightInRawPixels());
+  } else {
+    const double scale = DisplayInformation::GetForCurrentView().RawPixelsPerViewPixel();
+    width = static_cast<int>(std::lround(bounds.Width * scale));
+    height = static_cast<int>(std::lround(bounds.Height * scale));
+  }
+  width = std::max(width, 1);
+  height = std::max(height, 1);
   if (width == g_pixelWidth && height == g_pixelHeight) {
     return;
   }
   g_pixelWidth = width;
   g_pixelHeight = height;
-  Log.info("CoreWindow size {}x{} ({}x{} at scale {})", width, height, bounds.Width, bounds.Height, scale);
+  g_contentScale = bounds.Width > 0.f ? static_cast<float>(width) / bounds.Width : 1.f;
+  Log.info("Window size {}x{} ({}x{} at scale {})", width, height, bounds.Width, bounds.Height, g_contentScale);
   if (g_proxyWindow != nullptr) {
     // The offscreen driver turns this into the usual resize events.
     TRY_WARN(SDL_SetWindowSize(g_proxyWindow, width, height), "Failed to resize proxy window: {}", SDL_GetError());
@@ -500,6 +531,11 @@ struct App : winrt::implements<App, IFrameworkViewSource, IFrameworkView> {
     window.KeyUp([](const auto&, const KeyEventArgs& args) { on_key(args, false); });
     window.CharacterReceived([](const auto&, const CharacterReceivedEventArgs& args) { on_character(args); });
     DisplayInformation::GetForCurrentView().DpiChanged([](const auto&, const auto&) { update_window_size(); });
+    if (is_xbox()) {
+      if (const auto hdmi = HdmiDisplayInformation::GetForCurrentView()) {
+        hdmi.DisplayModesChanged([](const auto&, const auto&) { g_displayModeChanged = true; });
+      }
+    }
     // On Xbox, B raises a back request; unhandled, it would send the app to the background.
     SystemNavigationManager::GetForCurrentView().BackRequested(
         [](const auto&, const BackRequestedEventArgs& args) { args.Handled(true); });
@@ -552,6 +588,8 @@ void get_pixel_size(int& width, int& height) noexcept {
   height = g_pixelHeight;
 }
 
+float get_content_scale() noexcept { return g_contentScale; }
+
 bool is_xbox() noexcept {
   static const bool xbox = [] {
     try {
@@ -586,6 +624,9 @@ void pump_events(bool wait) noexcept {
     } catch (const winrt::hresult_error& e) {
       Log.error("Failed to process CoreWindow events: {}", to_utf8(e.message()));
     }
+  }
+  if (g_displayModeChanged.exchange(false)) {
+    update_window_size();
   }
   sync_gamepads();
 }

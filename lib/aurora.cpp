@@ -154,8 +154,7 @@ AuroraInfo initialize(int argc, char* argv[], const AuroraConfig& config) noexce
     std::vector<AuroraBackend> backendOrder(PreferredBackendOrder.begin(), PreferredBackendOrder.end());
 #ifdef AURORA_UWP
     if (uwp::is_xbox()) {
-      // On Xbox, Dawn's D3D12 device is removed (DXGI_ERROR_DRIVER_INTERNAL_ERROR) as soon as it creates its first
-      // render pipeline, while D3D11 works.
+      // D3D12 only works on Xbox by patching the D3D12 runtime (see uwp/xbox_d3d12.hpp), so prefer D3D11 there.
       std::ranges::stable_partition(backendOrder, [](AuroraBackend backend) { return backend == BACKEND_D3D11; });
     }
 #endif

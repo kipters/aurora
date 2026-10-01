@@ -43,6 +43,8 @@ if (CMAKE_SYSTEM_NAME STREQUAL Windows)
                 lib/uwp/audio.hpp
                 lib/uwp/host.cpp
                 lib/uwp/host.hpp
+                lib/uwp/xbox_d3d12.cpp
+                lib/uwp/xbox_d3d12.hpp
         )
         # C++/WinRT, and mmdevapi for ActivateAudioInterfaceAsync
         target_link_libraries(aurora_core PRIVATE WindowsApp.lib Mmdevapi.lib)

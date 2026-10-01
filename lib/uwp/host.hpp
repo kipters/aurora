@@ -20,8 +20,12 @@ using MainFunction = int (*)(int argc, char* argv[]);
 // Runs the UWP application, calling `main` on the UI thread once the CoreWindow exists.
 int run(MainFunction main) noexcept;
 
-// Size of the CoreWindow's client area in physical pixels.
+// Size to render at, in physical pixels. On Xbox this is the TV's resolution, which can be larger than the
+// CoreWindow.
 void get_pixel_size(int& width, int& height) noexcept;
+
+// Physical pixels per CoreWindow unit (2 when rendering at 3840x2160 on Xbox), used to scale the UI.
+float get_content_scale() noexcept;
 
 // Whether the app is running on an Xbox console.
 bool is_xbox() noexcept;

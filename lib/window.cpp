@@ -496,7 +496,14 @@ AuroraWindowSize get_window_size() {
     }
   }
 
+#ifdef AURORA_UWP
+  // The proxy window is sized in physical pixels; report the CoreWindow's scale so the UI keeps its size.
+  const float scale = uwp::get_content_scale();
+  width = static_cast<int>(std::lround(static_cast<float>(width) / scale));
+  height = static_cast<int>(std::lround(static_cast<float>(height) / scale));
+#else
   const float scale = SDL_GetWindowDisplayScale(g_window);
+#endif
   return {
       .width = static_cast<uint32_t>(width),
       .height = static_cast<uint32_t>(height),
