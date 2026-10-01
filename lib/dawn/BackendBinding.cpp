@@ -7,6 +7,9 @@
 #if !defined(SDL_PLATFORM_MACOS) && !defined(SDL_PLATFORM_IOS) && !defined(SDL_PLATFORM_TVOS)
 #include <SDL3/SDL_video.h>
 #endif
+#ifdef AURORA_UWP
+#include "../uwp/host.hpp"
+#endif
 
 namespace aurora::webgpu {
 namespace utils {
@@ -16,6 +19,13 @@ std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptorCocoa(SDL
 std::shared_ptr<wgpu::ChainedStruct> SetupWindowAndGetSurfaceDescriptor(SDL_Window* window) {
 #if defined(SDL_PLATFORM_MACOS) || defined(SDL_PLATFORM_IOS) || defined(SDL_PLATFORM_TVOS)
   return SetupWindowAndGetSurfaceDescriptorCocoa(window);
+#elif defined(AURORA_UWP)
+  // The SDL window is only a proxy; present to the host's CoreWindow.
+  (void)window;
+  std::shared_ptr<wgpu::SurfaceDescriptorFromWindowsCoreWindow> desc =
+      std::make_shared<wgpu::SurfaceDescriptorFromWindowsCoreWindow>();
+  desc->coreWindow = uwp::get_core_window();
+  return std::move(desc);
 #else
   const auto props = SDL_GetWindowProperties(window);
 #if defined(SDL_PLATFORM_ANDROID)

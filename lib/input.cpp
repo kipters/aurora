@@ -452,8 +452,13 @@ void persist_controller_for_player(uint32_t player, const GameController* contro
 void initialize() noexcept {
   /* Make sure we initialize everything input related now, this will automatically add all of the connected controllers
    * as expected */
-  AURORA_ASSERT(SDL_Init(SDL_INIT_HAPTIC | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR),
-                "Failed to initialize SDL subsystems: {}", SDL_GetError());
+#ifdef AURORA_UWP
+  // SDL is built without haptic and sensor support for UWP
+  constexpr SDL_InitFlags flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
+#else
+  constexpr SDL_InitFlags flags = SDL_INIT_HAPTIC | SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_SENSOR;
+#endif
+  AURORA_ASSERT(SDL_Init(flags), "Failed to initialize SDL subsystems: {}", SDL_GetError());
 }
 
 struct MouseScrollStatus {

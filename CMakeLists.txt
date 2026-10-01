@@ -15,6 +15,7 @@ option(AURORA_ENABLE_RMLUI "Enable HTML/CSS Based UI Library for use in end-user
 option(AURORA_CACHE_USE_ZSTD "Compress WebGPU cache entries with zstd" ON)
 
 include(CMakeDependentOption)
+cmake_dependent_option(AURORA_UWP "Build for a UWP app (e.g. Xbox Dev Mode), using aurora's UWP host for windowing, input and audio" OFF "WIN32" OFF)
 cmake_dependent_option(AURORA_ENABLE_EXAMPLES "Enable examples" ON "CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR" OFF)
 cmake_dependent_option(AURORA_ENABLE_TESTS "Enable tests" ON "NOT CMAKE_CROSSCOMPILING" OFF)
 
@@ -42,6 +43,11 @@ set(AURORA_SDL3_PROVIDER "${_default_provider}" CACHE STRING
 set_property(CACHE AURORA_SDL3_PROVIDER PROPERTY STRINGS auto vendor system package)
 set(AURORA_SDL3_LINKAGE "${_default_linkage}" CACHE STRING "SDL3 linkage type preference")
 set_property(CACHE AURORA_SDL3_LINKAGE PROPERTY STRINGS shared static)
+if (AURORA_UWP)
+  # SDL3 has no UWP support, so it's built from source without its Win32 drivers (see AuroraSDL3Provider.cmake)
+  set(AURORA_SDL3_PROVIDER "vendor" CACHE STRING "" FORCE)
+  set(AURORA_SDL3_LINKAGE "static" CACHE STRING "" FORCE)
+endif ()
 
 # nod (if AURORA_ENABLE_DVD)
 set(AURORA_NOD_PROVIDER "${_default_provider}" CACHE STRING

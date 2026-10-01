@@ -24,9 +24,15 @@
 #include "internal.hpp"
 #include "thread.hpp"
 #include "window.hpp"
+#ifdef AURORA_UWP
+#include "uwp/host.hpp"
+#endif
 
 #include <SDL3/SDL_filesystem.h>
 #include <magic_enum.hpp>
+
+#include <algorithm>
+#include <vector>
 
 #include "system_info.hpp"
 #include "tracy/Tracy.hpp"
@@ -145,7 +151,15 @@ AuroraInfo initialize(int argc, char* argv[], const AuroraConfig& config) noexce
   }
 
   if (!windowCreated) {
-    for (const auto backendType : PreferredBackendOrder) {
+    std::vector<AuroraBackend> backendOrder(PreferredBackendOrder.begin(), PreferredBackendOrder.end());
+#ifdef AURORA_UWP
+    if (uwp::is_xbox()) {
+      // On Xbox, Dawn's D3D12 device is removed (DXGI_ERROR_DRIVER_INTERNAL_ERROR) as soon as it creates its first
+      // render pipeline, while D3D11 works.
+      std::ranges::stable_partition(backendOrder, [](AuroraBackend backend) { return backend == BACKEND_D3D11; });
+    }
+#endif
+    for (const auto backendType : backendOrder) {
       selectedBackend = backendType;
       if (!window::create_window(selectedBackend)) {
         continue;

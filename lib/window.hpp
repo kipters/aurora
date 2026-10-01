@@ -41,6 +41,8 @@ SDL_Renderer* get_sdl_renderer();
 bool is_paused() noexcept;
 bool is_presentable() noexcept;
 void set_surface_ready(bool ready) noexcept;
+// Pauses the app while it is in the background, e.g. minimized on mobile or hidden on UWP.
+void set_backgrounded(bool backgrounded) noexcept;
 void set_title(const char* title);
 void set_fullscreen(bool fullscreen);
 bool get_fullscreen();

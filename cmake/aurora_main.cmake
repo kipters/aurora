@@ -1,6 +1,15 @@
-add_library(aurora_main STATIC lib/main.cpp)
+if (AURORA_UWP)
+  add_library(aurora_main STATIC lib/uwp/main.cpp)
+else ()
+  add_library(aurora_main STATIC lib/main.cpp)
+endif ()
 add_library(aurora::main ALIAS aurora_main)
 set_target_properties(aurora_main PROPERTIES FOLDER "aurora")
 
 target_include_directories(aurora_main PUBLIC include)
 target_link_libraries(aurora_main PUBLIC ${AURORA_SDL3_TARGET})
+if (AURORA_UWP)
+  target_link_libraries(aurora_main PUBLIC aurora::core)
+  # The linker only picks wWinMain as the entry point when it's defined in an object file, not a library.
+  target_link_options(aurora_main INTERFACE /ENTRY:wWinMainCRTStartup)
+endif ()

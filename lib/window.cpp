@@ -36,6 +36,9 @@ extern "C" void Android_UnlockActivityMutex(void);
 #include "rmlui.hpp"
 #include "time_internal.hpp"
 #include "dolphin/vi/vi_internal.hpp"
+#ifdef AURORA_UWP
+#include "uwp/host.hpp"
+#endif
 
 namespace aurora::window {
 namespace {
@@ -150,12 +153,10 @@ bool SDLCALL lifecycle_event_watch(void*, SDL_Event* event) {
     switch (event->type) {
 #if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_APPLE)
     case SDL_EVENT_WINDOW_MINIMIZED:
-      time::internal::set_pause_reason(time::internal::PauseReason::Background, true);
-      g_backgrounded.store(true, std::memory_order_relaxed);
+      set_backgrounded(true);
       break;
     case SDL_EVENT_WINDOW_RESTORED:
-      g_backgrounded.store(false, std::memory_order_relaxed);
-      time::internal::set_pause_reason(time::internal::PauseReason::Background, false);
+      set_backgrounded(false);
       break;
 #endif
     default:
@@ -290,6 +291,10 @@ const AuroraEvent* poll_events() {
   SDL_Event event;
   // Clear out the previous scroll values to prevent ghost input
   input::set_mouse_scroll(0, 0);
+#ifdef AURORA_UWP
+  // SDL can't wait on CoreWindow events, so block in the host instead of SDL_WaitEvent.
+  uwp::pump_events(is_paused());
+#else
   if (is_paused()) {
     ZoneScopedN("SDL_WaitEvent (paused)");
     if (SDL_WaitEvent(&event)) {
@@ -298,6 +303,7 @@ const AuroraEvent* poll_events() {
       Log.warn("SDL_WaitEvent failed: {}", SDL_GetError());
     }
   }
+#endif
   while (true) {
     bool hasEvent = false;
     {
@@ -338,6 +344,11 @@ bool create_window(AuroraBackend backend) {
   if (height < 480) {
     height = 480;
   }
+#ifdef AURORA_UWP
+  // The proxy window always matches the CoreWindow.
+  flags &= ~SDL_WINDOW_FULLSCREEN;
+  uwp::get_pixel_size(width, height);
+#endif
 
   Sint32 posX = g_config.windowPosX;
   Sint32 posY = g_config.windowPosY;
@@ -366,8 +377,12 @@ bool create_window(AuroraBackend backend) {
     Log.error("Failed to create window: {}", SDL_GetError());
     return false;
   }
+#ifdef AURORA_UWP
+  uwp::attach_window(g_window);
+#else
   SDL_SetWindowMinimumSize(g_window, 640, 480);
   set_window_icon();
+#endif
   return true;
 }
 
@@ -394,6 +409,9 @@ void destroy_window() {
     g_renderer = nullptr;
   }
   if (g_window != nullptr) {
+#ifdef AURORA_UWP
+    uwp::detach_window();
+#endif
     SDL_DestroyWindow(g_window);
     g_window = nullptr;
   }
@@ -407,6 +425,12 @@ void show_window() {
 
 bool initialize() {
   /* We don't want to initialize anything input related here, otherwise the add events will get lost to the void */
+#ifdef AURORA_UWP
+  // SDL has no UWP video driver; the offscreen driver provides a proxy window that the host keeps in sync with the
+  // CoreWindow. HIDAPI device access isn't available to UWP apps; gamepads come from the host as virtual joysticks.
+  TRY(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "offscreen"), "Error setting {}: {}", SDL_HINT_VIDEO_DRIVER, SDL_GetError());
+  TRY(SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI, "0"), "Error setting {}: {}", SDL_HINT_JOYSTICK_HIDAPI, SDL_GetError());
+#endif
   TRY(SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight"), "Error setting {}: {}", SDL_HINT_ORIENTATIONS,
       SDL_GetError());
   TRY(SDL_InitSubSystem(SDL_INIT_EVENTS | SDL_INIT_VIDEO), "Error initializing SDL: {}", SDL_GetError());
@@ -514,6 +538,11 @@ void set_surface_ready(bool ready) noexcept {
   time::internal::set_pause_reason(time::internal::PauseReason::Surface, !ready);
 }
 
+void set_backgrounded(bool backgrounded) noexcept {
+  g_backgrounded.store(backgrounded, std::memory_order_release);
+  time::internal::set_pause_reason(time::internal::PauseReason::Background, backgrounded);
+}
+
 SurfaceLock::SurfaceLock() noexcept {
 #if defined(SDL_PLATFORM_ANDROID)
   Android_LockActivityMutex();
@@ -536,23 +565,46 @@ void set_title(const char* title) {
 }
 
 void set_fullscreen(bool fullscreen) {
+#ifdef AURORA_UWP
+  // The CoreWindow decides the size; the proxy window must not change on its own.
+  (void)fullscreen;
+#else
   TRY_WARN(SDL_SetWindowFullscreen(g_window, fullscreen), "Failed to set window fullscreen: {}", SDL_GetError());
+#endif
 }
 
-bool get_fullscreen() { return (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0u; }
+bool get_fullscreen() {
+#ifdef AURORA_UWP
+  return true;
+#else
+  return (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0u;
+#endif
+}
 
 void set_window_size(uint32_t width, uint32_t height) {
+#ifdef AURORA_UWP
+  (void)width;
+  (void)height;
+#else
   TRY_WARN(SDL_RestoreWindow(g_window), "Failed to un-maximize window: {}", SDL_GetError());
   TRY_WARN(SDL_SetWindowSize(g_window, width, height), "Failed to set window size: {}", SDL_GetError());
+#endif
 }
 
 void set_window_position(uint32_t x, uint32_t y) {
+#ifdef AURORA_UWP
+  (void)x;
+  (void)y;
+#else
   TRY_WARN(SDL_SetWindowPosition(g_window, x, y), "Failed to set window position: {}", SDL_GetError());
+#endif
 }
 
 void center_window() {
+#ifndef AURORA_UWP
   TRY_WARN(SDL_SetWindowPosition(g_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED),
            "Failed to center window: {}", SDL_GetError());
+#endif
 }
 
 static void push_future_resize_event() {

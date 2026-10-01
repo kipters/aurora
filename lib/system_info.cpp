@@ -72,6 +72,10 @@ static std::string wideStringToUtf8(std::wstring_view str) {
 }
 
 std::string GetCpuModel() {
+#ifdef AURORA_UWP
+  // WMI isn't reachable from a UWP app container.
+  return Unknown;
+#endif
   // Good fucking lord Microsoft, what the fuck is this?
   // https://learn.microsoft.com/en-us/windows/win32/wmisdk/example--getting-wmi-data-from-the-local-computer
 

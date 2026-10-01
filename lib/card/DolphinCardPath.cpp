@@ -39,6 +39,10 @@ using namespace Windows::Storage;
 #endif
 
 std::string ResolveDolphinCardPath(ECardSlot slot, const char* regionCode, bool isGciFolder) {
+#ifdef AURORA_UWP
+  // Other apps' data, Dolphin's included, isn't reachable from a UWP app container.
+  return {};
+#else
 #if !WINDOWS_STORE
   /* Detect where the User directory is. There are two different cases
    * 1. HKCU\Software\Dolphin Emulator\UserConfigPath exists
@@ -91,6 +95,7 @@ std::string ResolveDolphinCardPath(ECardSlot slot, const char* regionCode, bool 
   }
 
   return path;
+#endif
 }
 #else
 static std::optional<std::string> GetPrefPath(const char* app) {

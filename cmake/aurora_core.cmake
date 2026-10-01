@@ -1,4 +1,5 @@
 add_library(aurora_core STATIC
+        lib/audio.cpp
         lib/aurora.cpp
         lib/device.cpp
         lib/device.hpp
@@ -35,6 +36,17 @@ endif ()
 if (CMAKE_SYSTEM_NAME STREQUAL Windows)
     # stuff for fetching system info.
     target_link_libraries(aurora_core PRIVATE wbemuuid.lib comsuppw.lib ntdll.lib DXGI.lib)
+    if (AURORA_UWP)
+        target_compile_definitions(aurora_core PUBLIC AURORA_UWP)
+        target_sources(aurora_core PRIVATE
+                lib/uwp/audio.cpp
+                lib/uwp/audio.hpp
+                lib/uwp/host.cpp
+                lib/uwp/host.hpp
+        )
+        # C++/WinRT, and mmdevapi for ActivateAudioInterfaceAsync
+        target_link_libraries(aurora_core PRIVATE WindowsApp.lib Mmdevapi.lib)
+    endif ()
 elseif (APPLE)
     target_sources(aurora_core PRIVATE lib/system_info_mac.mm)
 endif ()

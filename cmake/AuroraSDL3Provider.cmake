@@ -138,6 +138,20 @@ elseif (_aurora_sdl3_provider STREQUAL "vendor")
       set(SDL_LIBC ON CACHE BOOL "Use the system C library" FORCE)
     endif ()
 
+    set(_aurora_sdl3_extra_patches)
+    if (AURORA_UWP)
+      # Aurora's UWP host provides the window, gamepads and audio output. Keep only the SDL
+      # subsystems that work inside a UWP app container on Xbox.
+      set(SDL_UWP_HOST ON CACHE BOOL "Leave out SDL's Win32 video and joystick drivers" FORCE)
+      foreach (_option SDL_HAPTIC SDL_SENSOR SDL_DIALOG SDL_TRAY SDL_CAMERA SDL_GPU SDL_DIRECTX SDL_WASAPI
+          SDL_XINPUT SDL_OPENGL SDL_OPENGLES SDL_VULKAN SDL_HIDAPI_JOYSTICK SDL_TESTS SDL_EXAMPLES)
+        set(${_option} OFF CACHE BOOL "" FORCE)
+      endforeach ()
+      list(APPEND _aurora_sdl3_extra_patches COMMAND ${CMAKE_COMMAND}
+        -DSDL_SOURCE_DIR=<SOURCE_DIR>
+        -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-uwp-host.cmake")
+    endif ()
+
     include(FetchContent)
     FetchContent_Declare(SDL
       URL "https://github.com/libsdl-org/SDL/archive/${AURORA_SDL3_REF}.tar.gz"
@@ -148,9 +162,17 @@ elseif (_aurora_sdl3_provider STREQUAL "vendor")
       COMMAND ${CMAKE_COMMAND}
         -DSDL_SOURCE_DIR=<SOURCE_DIR>
         -P "${CMAKE_CURRENT_LIST_DIR}/patches/apply-sdl3-android-security-exception.cmake"
+      ${_aurora_sdl3_extra_patches}
       EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(SDL)
+    if (AURORA_UWP)
+      foreach (_sdl_target SDL3-static SDL3-shared)
+        if (TARGET ${_sdl_target})
+          target_compile_definitions(${_sdl_target} PRIVATE SDL_UWP_HOST)
+        endif ()
+      endforeach ()
+    endif ()
   else ()
     message(STATUS "aurora: Using existing SDL3")
   endif ()
